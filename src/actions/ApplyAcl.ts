@@ -20,7 +20,6 @@ import { RoomUpdateError } from "../models/RoomUpdateError";
 import { Mjolnir } from "../Mjolnir";
 import config from "../config";
 import { LogLevel } from "matrix-bot-sdk";
-import { logMessage } from "../LogProxy";
 import { ERROR_KIND_FATAL, ERROR_KIND_PERMISSION } from "../ErrorCache";
 
 /**
@@ -49,12 +48,12 @@ export async function applyServerAcls(lists: BanList[], roomIds: string[], mjoln
     const errors: RoomUpdateError[] = [];
     for (const roomId of roomIds) {
         try {
-            await logMessage(LogLevel.DEBUG, "ApplyAcl", `Checking ACLs for ${roomId}`, roomId);
+            await mjolnir.logMessage(LogLevel.DEBUG, "ApplyAcl", `Checking ACLs for ${roomId}`, roomId);
 
             try {
                 const currentAcl = await mjolnir.client.getRoomStateEvent(roomId, "m.room.server_acl", "");
                 if (acl.matches(currentAcl)) {
-                    await logMessage(LogLevel.DEBUG, "ApplyAcl", `Skipping ACLs for ${roomId} because they are already the right ones`, roomId);
+                    await mjolnir.logMessage(LogLevel.DEBUG, "ApplyAcl", `Skipping ACLs for ${roomId} because they are already the right ones`, roomId);
                     continue;
                 }
             } catch (e) {
@@ -62,12 +61,12 @@ export async function applyServerAcls(lists: BanList[], roomIds: string[], mjoln
             }
 
             // We specifically use sendNotice to avoid having to escape HTML
-            await logMessage(LogLevel.DEBUG, "ApplyAcl", `Applying ACL in ${roomId}`, roomId);
+            await mjolnir.logMessage(LogLevel.DEBUG, "ApplyAcl", `Applying ACL in ${roomId}`, roomId);
 
             if (!config.noop) {
                 await mjolnir.client.sendStateEvent(roomId, "m.room.server_acl", "", finalAcl);
             } else {
-                await logMessage(LogLevel.WARN, "ApplyAcl", `Tried to apply ACL in ${roomId} but Mjolnir is running in no-op mode`, roomId);
+                await mjolnir.logMessage(LogLevel.WARN, "ApplyAcl", `Tried to apply ACL in ${roomId} but Mjolnir is running in no-op mode`, roomId);
             }
         } catch (e) {
             const message = e.message || (e.body ? e.body.error : '<no message>');

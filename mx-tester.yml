@@ -10,7 +10,7 @@ up:
     - echo "Synapse is ready"
 
 run:
-  - yarn test:integration
+  - yarnpkg test:integration
 down:
   finally:
     - docker stop mjolnir-test-reverse-proxy || true

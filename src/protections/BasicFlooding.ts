@@ -17,7 +17,6 @@ limitations under the License.
 import { IProtection } from "./IProtection";
 import { Mjolnir } from "../Mjolnir";
 import { LogLevel, LogService } from "matrix-bot-sdk";
-import { logMessage } from "../LogProxy";
 import config from "../config";
 
 export const MAX_PER_MINUTE = 10; // if this is exceeded, we'll ban the user for spam and redact their messages
@@ -57,11 +56,11 @@ export class BasicFlooding implements IProtection {
         }
 
         if (messageCount >= MAX_PER_MINUTE) {
-            await logMessage(LogLevel.WARN, "BasicFlooding", `Banning ${event['sender']} in ${roomId} for flooding (${messageCount} messages in the last minute)`, roomId);
+            await mjolnir.logMessage(LogLevel.WARN, "BasicFlooding", `Banning ${event['sender']} in ${roomId} for flooding (${messageCount} messages in the last minute)`, roomId);
             if (!config.noop) {
                 await mjolnir.client.banUser(event['sender'], roomId, "spam");
             } else {
-                await logMessage(LogLevel.WARN, "BasicFlooding", `Tried to ban ${event['sender']} in ${roomId} but Mjolnir is running in no-op mode`, roomId);
+                await mjolnir.logMessage(LogLevel.WARN, "BasicFlooding", `Tried to ban ${event['sender']} in ${roomId} but Mjolnir is running in no-op mode`, roomId);
             }
 
             if (this.recentlyBanned.includes(event['sender'])) return; // already handled (will be redacted)
@@ -74,7 +73,7 @@ export class BasicFlooding implements IProtection {
                     await mjolnir.client.redactEvent(roomId, eventId, "spam");
                 }
             } else {
-                await logMessage(LogLevel.WARN, "BasicFlooding", `Tried to redact messages for ${event['sender']} in ${roomId} but Mjolnir is running in no-op mode`, roomId);
+                await mjolnir.logMessage(LogLevel.WARN, "BasicFlooding", `Tried to redact messages for ${event['sender']} in ${roomId} but Mjolnir is running in no-op mode`, roomId);
             }
 
             // Free up some memory now that we're ready to handle it elsewhere
