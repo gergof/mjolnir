@@ -27,7 +27,7 @@ import {
     getRequestFn,
     setRequestFn,
 } from "matrix-bot-sdk";
-import { logMessage } from "./LogProxy";
+import { ILogProxy } from "./Mjolnir";
 import config from "./config";
 import * as htmlEscape from "escape-html";
 import { ClientRequest, IncomingMessage } from "http";
@@ -51,17 +51,17 @@ export function isTrueJoinEvent(event: any): boolean {
     return membership === 'join' && prevMembership !== "join";
 }
 
-export async function redactUserMessagesIn(client: MatrixClient, userIdOrGlob: string, targetRoomIds: string[], limit = 1000) {
+export async function redactUserMessagesIn(client: MatrixClient, logProxy: ILogProxy, userIdOrGlob: string, targetRoomIds: string[], limit = 1000) {
     for (const targetRoomId of targetRoomIds) {
-        await logMessage(LogLevel.DEBUG, "utils#redactUserMessagesIn", `Fetching sent messages for ${userIdOrGlob} in ${targetRoomId} to redact...`, targetRoomId);
+        await logProxy.logMessage(LogLevel.DEBUG, "utils#redactUserMessagesIn", `Fetching sent messages for ${userIdOrGlob} in ${targetRoomId} to redact...`, targetRoomId);
 
         await getMessagesByUserIn(client, userIdOrGlob, targetRoomId, limit, async (eventsToRedact) => {
             for (const victimEvent of eventsToRedact) {
-                await logMessage(LogLevel.DEBUG, "utils#redactUserMessagesIn", `Redacting ${victimEvent['event_id']} in ${targetRoomId}`, targetRoomId);
+                await logProxy.logMessage(LogLevel.DEBUG, "utils#redactUserMessagesIn", `Redacting ${victimEvent['event_id']} in ${targetRoomId}`, targetRoomId);
                 if (!config.noop) {
                     await client.redactEvent(targetRoomId, victimEvent['event_id']);
                 } else {
-                    await logMessage(LogLevel.WARN, "utils#redactUserMessagesIn", `Tried to redact ${victimEvent['event_id']} in ${targetRoomId} but Mjolnir is running in no-op mode`, targetRoomId);
+                    await logProxy.logMessage(LogLevel.WARN, "utils#redactUserMessagesIn", `Tried to redact ${victimEvent['event_id']} in ${targetRoomId} but Mjolnir is running in no-op mode`, targetRoomId);
                 }
             }
         });
@@ -171,7 +171,7 @@ export async function getMessagesByUserIn(client: MatrixClient, sender: string, 
     }
 }
 
-export async function replaceRoomIdsWithPills(client: MatrixClient, text: string, roomIds: string[] | string, msgtype: MessageType = "m.text"): Promise<TextualMessageEventContent> {
+export async function replaceRoomIdsWithPills(client: MatrixClient, logProxy: ILogProxy, text: string, roomIds: string[] | string, msgtype: MessageType = "m.text"): Promise<TextualMessageEventContent> {
     if (!Array.isArray(roomIds)) roomIds = [roomIds];
 
     const content: TextualMessageEventContent = {
@@ -192,7 +192,7 @@ export async function replaceRoomIdsWithPills(client: MatrixClient, text: string
             alias = (await client.getPublishedAlias(roomId)) || roomId;
         } catch (e) {
             // This is a recursive call, so tell the function not to try and call us
-            await logMessage(LogLevel.WARN, "utils", `Failed to resolve room alias for ${roomId} - see console for details`, null, true);
+            await logProxy.logMessage(LogLevel.WARN, "utils", `Failed to resolve room alias for ${roomId} - see console for details`, null, true);
             LogService.warn("utils", extractRequestError(e));
         }
         const regexRoomId = new RegExp(escapeRegex(roomId), "g");

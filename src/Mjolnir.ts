@@ -348,7 +348,7 @@ export class Mjolnir implements ILogProxy {
                 format: "org.matrix.custom.html",
             };
             if (!isRecursive) {
-                evContent = await replaceRoomIdsWithPills(client, clientMessage, roomIds, "m.notice");
+                evContent = await replaceRoomIdsWithPills(client, this, clientMessage, roomIds, "m.notice");
             }
 
             await client.sendMessage(managementRoomId, evContent);

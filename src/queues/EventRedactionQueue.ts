@@ -49,7 +49,7 @@ export class RedactUserInRoom implements QueuedRedaction {
 
     public async redact(client: MatrixClient, logProxy: ILogProxy) {
         await logProxy.logMessage(LogLevel.DEBUG, "Mjolnir", `Redacting events from ${this.userId} in room ${this.roomId}.`);
-        await redactUserMessagesIn(client, this.userId, [this.roomId]);
+        await redactUserMessagesIn(client, logProxy, this.userId, [this.roomId]);
     }
 
     public redactionEqual(redaction: QueuedRedaction): boolean {
