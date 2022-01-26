@@ -36,6 +36,7 @@ import { logMessage } from "./LogProxy";
 import ErrorCache, { ERROR_KIND_FATAL, ERROR_KIND_PERMISSION } from "./ErrorCache";
 import { IProtection } from "./protections/IProtection";
 import { PROTECTIONS } from "./protections/protections";
+import { ConsequenceType, Consequence } from "./protections/consequence";
 import { ProtectionSettingValidationError } from "./protections/ProtectionSettings";
 import { UnlistedUserRedactionQueue } from "./queues/UnlistedUserRedactionQueue";
 import { Healthz } from "./health/healthz";
@@ -54,6 +55,7 @@ const WATCHED_LISTS_EVENT_TYPE = "org.matrix.mjolnir.watched_lists";
 const ENABLED_PROTECTIONS_EVENT_TYPE = "org.matrix.mjolnir.enabled_protections";
 const PROTECTED_ROOMS_EVENT_TYPE = "org.matrix.mjolnir.protected_rooms";
 const WARN_UNPROTECTED_ROOM_EVENT_PREFIX = "org.matrix.mjolnir.unprotected_room_warning.for.";
+const CONSEQUENCE_EVENT_DATA = "org.matrix.mjolnir.consequence";
 
 export class Mjolnir {
     private displayName: string;
@@ -756,6 +758,48 @@ export class Mjolnir {
         }
     }
 
+    private async handleConsequence(protection: IProtection, roomId: string, event: any, consequence: Consequence) {
+        let undoable = false;
+        switch (consequence.type) {
+            case ConsequenceType.alert:
+                break;
+            case ConsequenceType.redact:
+                await this.client.redactEvent(roomId, event["event_id"], "abuse detected");
+                break;
+            case ConsequenceType.ban:
+                undoable = true;
+                //await this.client.banUser(event["sender"], roomId, "abuse detected");
+                break;
+        }
+
+        let message = `protection ${protection.name} enacting ${ConsequenceType[consequence.type]} against ${event["sender"]}`;
+        if (consequence.reason !== undefined) {
+            message += ` (reason: ${consequence.reason})`
+        }
+        if (undoable) {
+            message += "\n👎 to undo"
+        }
+
+        await this.client.sendMessage(this.managementRoomId, {
+            msgtype: "m.notice",
+            body: message,
+            [CONSEQUENCE_EVENT_DATA]: {
+                who: event["sender"],
+                room: roomId,
+                type: ConsequenceType[consequence.type]
+            }
+        });
+    }
+
+    private async handleUndoConsequence(roomId: string, victim: string, type: ConsequenceType) {
+        switch (type) {
+            case ConsequenceType.ban:
+                await this.client.unbanUser(victim, roomId);
+                break;
+        }
+    }
+
+
     private async handleEvent(roomId: string, event: any) {
         // Check for UISI errors
         if (roomId === this.managementRoomId) {
@@ -782,14 +826,20 @@ export class Mjolnir {
 
             // Iterate all the protections
             for (const protection of this.protections) {
+                let consequence: Consequence | undefined = undefined;
                 try {
-                    await protection.handleEvent(this, roomId, event);
+                    consequence = await protection.handleEvent(this, roomId, event);
                 } catch (e) {
                     const eventPermalink = Permalinks.forEvent(roomId, event['event_id']);
                     LogService.error("Mjolnir", "Error handling protection: " + protection.name);
                     LogService.error("Mjolnir", "Failed event: " + eventPermalink);
                     LogService.error("Mjolnir", extractRequestError(e));
                     await this.client.sendNotice(this.managementRoomId, "There was an error processing an event through a protection - see log for details. Event: " + eventPermalink);
+                    continue;
+                }
+
+                if (consequence !== undefined) {
+                    await this.handleConsequence(protection, roomId, event, consequence);
                 }
             }
 
@@ -816,6 +866,32 @@ export class Mjolnir {
                 const redactionErrors = await this.processRedactionQueue(roomId);
                 await this.printActionResult(banErrors);
                 await this.printActionResult(redactionErrors);
+            }
+        }
+
+        let relation: object | undefined = undefined;
+        if (
+            event["type"] === "m.reaction"
+            && roomId == this.managementRoomId
+            && (relation = event?.content?.["m.relates_to"]) !== undefined
+            && relation["event_id"] !== undefined
+        ) {
+            // we've got a reaction
+
+            const relEvent = await this.client.getEvent(roomId, relation["event_id"]);
+            const consequenceData = relEvent?.content?.[CONSEQUENCE_EVENT_DATA];
+            if (
+                consequenceData !== undefined
+                && relation["key"] === '👎'
+                && consequenceData.who !== undefined
+                && consequenceData.room !== undefined
+            ) {
+                // someone's asked to undo a consequence
+                await this.handleUndoConsequence(
+                    consequenceData.room,
+                    consequenceData.who,
+                    ConsequenceType[consequenceData.type as keyof typeof ConsequenceType]
+                );
             }
         }
     }

@@ -16,6 +16,7 @@ limitations under the License.
 
 import { Mjolnir } from "../Mjolnir";
 import { AbstractProtectionSetting } from "./ProtectionSettings";
+import { Consequence } from "./consequence";
 
 /**
  * Represents a protection mechanism of sorts. Protections are intended to be
@@ -26,5 +27,5 @@ import { AbstractProtectionSetting } from "./ProtectionSettings";
 export interface IProtection {
     readonly name: string;
     settings: { [setting: string]: AbstractProtectionSetting<any, any> };
-    handleEvent(mjolnir: Mjolnir, roomId: string, event: any): Promise<any>;
+    handleEvent(mjolnir: Mjolnir, roomId: string, event: any): Promise<Consequence | undefined>;
 }
